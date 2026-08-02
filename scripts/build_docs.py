@@ -154,10 +154,13 @@ pre {{ background: var(--code); padding: .75rem; border-radius: 6px;
        overflow-x: auto; margin: .8rem 0; }}
 pre code {{ background: none; padding: 0; }}
 .tablewrap {{ overflow-x: auto; margin: .8rem 0; }}
-table {{ border-collapse: collapse; width: 100%; min-width: 20rem; }}
+table {{ border-collapse: collapse; width: 100%; min-width: 26rem; }}
 th, td {{ text-align: left; padding: .35rem .6rem .35rem 0; vertical-align: top;
           border-bottom: 1px solid var(--line); font-size: .92rem; }}
 th {{ color: var(--muted); font-weight: 600; }}
+/* The kind names are single tokens. Let the table scroll inside its own
+   container rather than breaking user_request across two lines. */
+td code {{ white-space: nowrap; overflow-wrap: normal; }}
 .formula {{ background: var(--card); border: 1px solid var(--line); border-radius: 8px;
             padding: .9rem 1rem; margin: 1rem 0; }}
 .formula b {{ color: var(--accent); }}

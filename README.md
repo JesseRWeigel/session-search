@@ -256,6 +256,85 @@ python found NUL + token; git grep -I found nothing; clean file stayed clean
   ok    NUL scan works and git grep demonstrably does not
 
 6. every tracked file, scanned for credentials, home paths and NUL bytes
+  ok    leakcheck: 0 finding(s) across 28 input(s)
+  ok    no tracked file exceeds 1 MB
+  ok    20 synthetic-fixture exemptions, matching the pinned count
+marker-blind sweep: 0 problem(s)
+  ok    no home path, account name or NUL byte in any tracked file, no exemptions
+
+7. the planted fixture archive: every known answer is found, first
+6 of 6 known answers found first
+  ok    all known answers rank first
+
+8. the control archive: the same queries must find nothing, and it is not empty
+2 absent needles, 31 turns in the control archive, 0 false positives
+  ok    the control archive returns nothing for absent needles
+
+9. the checker is independent of the redactor
+24 redactor patterns, 23 checker patterns, 0 shared
+  ok    no shared imports and no shared patterns
+
+10. the whole real archive: redacted, then audited by the independent checker
+    indexed 875 sessions, 52655 turns from 770 files
+      kinds: tool_input=15316, tool_output=14272, assistant_text=9525, meta=5776, thinking=3497, user_request=3461, error=808
+      skipped: 31809 attachments, 2181 encrypted reasoning blobs, 0 unparseable lines, 7179 empty turns
+      built in 3.2s
+  ok    real archive indexed
+  ok    audited 52655 real turns, 0 finding(s)
+
+11. negative control for check 10: the same audit over UNREDACTED text must fail
+5335 findings in the first 4000 unredacted turns, 0 after redaction
+  ok    the audit demonstrably fires on unredacted content
+
+12. README numbers still describe reality
+  ok    README check: 0 problem(s)
+
+13. the page is freshly generated and self contained
+  ok    docs/index.html matches its generator
+  ok    no remote references
+  ok    doctype, charset and viewport present
+
+14. the page loaded in a real browser
+  ok    390x844: {"viewport":"390x844","browser":"chrome-headless-shell","selftest":"SELFTEST:OK corpus=31 hits=3 top=aa11bb22:user_request:13 absent=0","hits":3,"scores":[13,9,8],"scrollWidth":390,"offenders":0,"cons
+  ok    1280x900: {"viewport":"1280x900","browser":"chrome-headless-shell","selftest":"SELFTEST:OK corpus=31 hits=3 top=aa11bb22:user_request:13 absent=0","hits":3,"scores":[13,9,8],"scrollWidth":1265,"offenders":0,"co
+
+15. negative control for check 14: a broken page must fail the browser check
+  ok    broken page rejected:   - the page's script never wrote its result, so it did not run: "script has not run"
+
+16. sabotages, each proved to change real output before anything is concluded
+  ok    parse-drop-tool-calls: output changed, suite went red with 6 failing assertion(s), first: FAIL: test_tool_input_carries_a_target (test_parse.TestKinds.test_tool_input_carries_a_target)
+  ok    rank-flat-kinds: output changed, suite went red with 3 failing assertion(s), first: FAIL: test_kind_points_are_ordered_as_documented (test_rank.TestComponents.test_kind_points_are_orde
+  ok    rank-invert-recency: output changed, suite went red with 4 failing assertion(s), first: FAIL: test_recency_bands (test_rank.TestComponents.test_recency_bands)
+  ok    redact-drop-aws-rule: output changed, suite went red with 27 failing assertion(s), first: ERROR: test_rendered_output_over_the_same_data_is_clean (test_leakcheck.TestAgainstTheRealPipeline.t
+  ok    redact-drop-private-ip-rule: output changed, suite went red with 3 failing assertion(s), first: FAIL: test_rendered_output_over_the_same_data_is_clean (test_leakcheck.TestAgainstTheRealPipeline.te
+  ok    excerpt-dump-everything: output changed, suite went red with 4 failing assertion(s), first: FAIL: test_a_missing_term_does_not_break_excerpting (test_excerpt.TestWindow.test_a_missing_term_doe
+  ok    index-rowid-drift: output changed, suite went red with 11 failing assertion(s), first: FAIL: test_date_filters (test_search.TestFilters.test_date_filters)
+sabotage: 7 of 7 proved
+  ok    sabotage: 7 of 7 proved
+
+17. the README describes this run
+  ok    README carries this run's summary line
+
+session-search verify: 24 checks, 0 failures
+```
+1. toolchain
+  ok    python3 3.12.3 with FTS5, node v24.13.0
+
+2. no third party dependencies, so nothing in this suite can skip on a missing install
+  ok    standard library only
+
+3. unit suite
+  ok    72 tests passed
+
+4. the index never lives inside the repository
+default index: ~/.local/share/session-search/index.db
+  ok    default index is outside the repo and *.db is gitignored
+
+5. NUL byte scan, in Python, plus proof that git grep cannot do this job
+python found NUL + token; git grep -I found nothing; clean file stayed clean
+  ok    NUL scan works and git grep demonstrably does not
+
+6. every tracked file, scanned for credentials, home paths and NUL bytes
   ok    leakcheck: 0 finding(s) across 26 input(s)
   ok    no tracked file exceeds 1 MB
   ok    20 synthetic-fixture exemptions, matching the pinned count
