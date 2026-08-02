@@ -188,6 +188,12 @@ Turns by kind: tool_input 15,049, tool_output 14,026, assistant_text 9,429, meta
 Regenerate with `python3 scripts/measure_real.py --write`.
 <!-- MEASURED:END -->
 
+The latency figures are the eight benchmark queries in `scripts/measure_real.py`, measured
+end to end from FTS lookup through scoring. A deliberately broad query with filters costs
+more: `search "playwright-core" --kind tool_input --tool Bash` matched 131 turns out of
+52 698 and took 307 ms, because a filtered scan cannot use the FTS index alone. That is
+the worst case seen so far and it is still interactive.
+
 Those numbers move as the archive grows. `scripts/measure_real.py --check` re-measures and
 fails if any of them has drifted more than 40 percent, which is wide enough to survive a
 month of ordinary work and narrow enough that "the index is empty" or "a source stopped
