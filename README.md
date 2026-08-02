@@ -1,5 +1,7 @@
 # session-search
 
+**[Open the live page](https://jesserweigel.github.io/session-search/)**
+
 Search every AI coding session you have ever run. Claude Code and Codex transcripts,
 indexed locally, ranked by a rule written out in plain language, and redacted before
 anything reaches your screen.
@@ -327,3 +329,5 @@ session-search verify: 24 checks, 0 failures
 ## Licence
 
 MIT. See `LICENSE`.
+
+Part of [722 things to build](https://github.com/JesseRWeigel/722-things-to-build).
