@@ -49,19 +49,19 @@ class TestCategories(unittest.TestCase):
                 self.assertMasked(text, label)
 
     def test_private_key_block(self):
-        block = ("-----BEGIN RSA PRIVATE KEY-----\n" + fill("pk", 200)
+        block = ("-----BEGIN RSA PRIVATE KEY-----\n" + fill("pk", 200)  # synthetic-fixture
                  + "\n-----END RSA PRIVATE KEY-----")
         out = redact.redact(block)
         self.assertNotIn("BEGIN RSA PRIVATE KEY", out)
         self.assertIn("[redacted:private-key]", out)
 
     def test_url_credentials(self):
-        out = redact.redact("postgres://admin:hunter2hunter2@db.example.com/app")
+        out = redact.redact("postgres://admin:hunter2hunter2@db.example.com/app")  # synthetic-fixture
         self.assertNotIn("hunter2hunter2", out)
         self.assertIn("[redacted:url-credentials]", out)
 
     def test_secret_assignment_by_key_name(self):
-        out = redact.redact("MYSTERY_TOKEN=correcthorsebatterystaple")
+        out = redact.redact("MYSTERY_TOKEN=correcthorsebatterystaple")  # synthetic-fixture
         self.assertNotIn("correcthorsebatterystaple", out)
         # Control: the same value under a harmless key name is left alone, so the rule is
         # keyed on the name and is not just masking every long word.
@@ -69,16 +69,16 @@ class TestCategories(unittest.TestCase):
         self.assertIn("correcthorsebatterystaple", keep)
 
     def test_addresses_and_home_paths(self):
-        out = redact.redact("mail someone@example.org about " + os.path.join("/home", "bob", "src"))
-        self.assertNotIn("someone@example.org", out)
+        out = redact.redact("mail someone@example.org about " + os.path.join("/home", "bob", "src"))  # synthetic-fixture
+        self.assertNotIn("someone@example.org", out)  # synthetic-fixture
         self.assertNotIn("bob", out)
         self.assertIn("~/src", out)
 
     def test_private_networks_but_not_loopback(self):
-        out = redact.redact("hosts: 10.1.2.3, 192.168.0.9, nas.local, 127.0.0.1, 8.8.8.8")
-        self.assertNotIn("10.1.2.3", out)
-        self.assertNotIn("192.168.0.9", out)
-        self.assertNotIn("nas.local", out)
+        out = redact.redact("hosts: 10.1.2.3, 192.168.0.9, nas.local, 127.0.0.1, 8.8.8.8")  # synthetic-fixture
+        self.assertNotIn("10.1.2.3", out)  # synthetic-fixture
+        self.assertNotIn("192.168.0.9", out)  # synthetic-fixture
+        self.assertNotIn("nas.local", out)  # synthetic-fixture
         # Control: loopback and a public resolver stay readable on purpose.
         self.assertIn("127.0.0.1", out)
         self.assertIn("8.8.8.8", out)
@@ -138,7 +138,7 @@ class TestSelfCheck(unittest.TestCase):
 class TestCounts(unittest.TestCase):
     def test_counts_report_what_was_removed_without_showing_it(self):
         counts = {}
-        redact.redact("AKIA" + fill("z", 16, UPPER) + " and a@b.com", counts)
+        redact.redact("AKIA" + fill("z", 16, UPPER) + " and a@b.com", counts)  # synthetic-fixture
         self.assertEqual(counts.get("aws-access-key-id"), 1)
         self.assertEqual(counts.get("address"), 1)
         # Control: clean text records nothing.

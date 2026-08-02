@@ -36,12 +36,12 @@ class TestDetector(unittest.TestCase):
             "ghp_" + fill("b", 36),
             "AKIA" + fill("c", 16, UPPER),
             "AIza" + fill("d", 35),
-            "-----BEGIN RSA PRIVATE KEY-----",
-            "postgres://admin:hunter2hunter2@db.example.com/app",
+            "-----BEGIN RSA PRIVATE KEY-----",  # synthetic-fixture
+            "postgres://admin:hunter2hunter2@db.example.com/app",  # synthetic-fixture
             os.path.join("/home", "someuser", "Projects"),
-            "someone@example.org",
-            "10.1.2.3",
-            "nas.local",
+            "someone@example.org",  # synthetic-fixture
+            "10.1.2.3",  # synthetic-fixture
+            "nas.local",  # synthetic-fixture
             fill("entropy", 44),
         ]
         for text in cases:

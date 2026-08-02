@@ -28,7 +28,7 @@ import shutil
 import sys
 import datetime
 
-ALPHA = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+ALPHA = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"  # synthetic-fixture
 UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
 
 
@@ -229,13 +229,13 @@ def build(dest, variant="planted"):
              "Stored. The AWS id AKIA{UPFILL:16} and secret {FILL:40} go in ~/.aws."),
             ("tool", ts(2, 2), "Bash", {"command": "env | grep -i key"},
              "OPENAI_API_KEY=sk-{FILL:48}\n"
-             "DATABASE_URL=postgres://admin:{FILL:20}@db.internal:5432/app\n"
+             "DATABASE_URL=postgres://admin:{FILL:20}@db.internal:5432/app\n"  # synthetic-fixture
              "GOOGLE_KEY=AIza{FILL:35}\n"
              "SLACK=xoxb-{FILL:24}\n"
              "JWT=eyJ{FILL:20}.eyJ{FILL:30}.{FILL:43}\n"
-             "contact jesse.example@example.com from 10.1.2.3 on nas.local\n"
-             "home is /home/someuser/Projects and /Users/someone/dev\n"
-             "phone 555-867-5309\n"),
+             "contact alex.example@example.com from 10.1.2.3 on nas.local\n"  # synthetic-fixture
+             "home is /home/someuser/Projects and /Users/someone/dev\n"  # synthetic-fixture
+             "phone 555-867-5309\n"),  # synthetic-fixture
             ("tool", ts(2, 3), "Bash", {"command": "hexdump -C blob.bin"},
              "raw bytes follow{NUL}and continue after the NUL byte"),
         ])

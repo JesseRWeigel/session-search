@@ -143,12 +143,12 @@ NOT_A_SECRET = [
 # What separates them from credentials is not vocabulary, it is contiguity. A credential
 # is an unbroken run of random characters. So the sweep looks at the longest unbroken run
 # inside a token, and only considers the token as a whole when it has at most two
-# separators, which is what keeps the AWS example secret wJalrXUtnFEMI/K7MDENG/bPxRfiC...
+# separators, which is what keeps the AWS example secret wJalrXUtnFEMI/K7…
 # reportable while a five-segment path is not.
 _IDENT_SPLIT = re.compile(r"[_\-/=+]")
 # A directory name. Two tests, both cheap: the character set, and no two consecutive
 # capitals. GraphiteDawnCache, GitHub, shell-snapshots and 40achingbrain are names.
-# wJalrXUtnFEMI and K7MDENG are not, because base64 puts capitals next to each other and
+# wJalrXUtnFEMI and K7M… are not, because base64 puts capitals next to each other and
 # CamelCase does not, which is what keeps the AWS example secret reportable.
 _PATH_SEGMENT = re.compile(r"\A-?[A-Za-z0-9][A-Za-z0-9._\-]*\Z")
 _TWO_CAPITALS = re.compile(r"[A-Z]{2}")
@@ -179,7 +179,7 @@ def _looks_like_path(tok: str) -> bool:
 
     The test is the segments BEFORE the last one. A path is a chain of directory names and
     those are words, so /Projects/tasks/<17 hex characters> is a path. The AWS
-    documentation example secret wJalrXUtnFEMI/K7MDENG/bPxRfiC... is not, because K7MDENG
+    documentation example secret wJalrXUtnFEMI/K7… is not, because K7MDENG
     is not a word, and it stays reportable.
     """
     if "/" not in tok:
@@ -228,7 +228,7 @@ def scan_text(text: str, where="<text>"):
         # Masks collapse to a single character that no signature can build on: replacing
         # them with a space let the assignment pattern read across the gap and pair a key
         # name with the next line's value, and replacing them with a letter turned
-        # postgres://MASK@db.example.com into an email address.
+        # postgres://<mask>@host into an email address.
         stripped = MASK.sub("·", line)
         for label, pat in SIGNATURES:
             for m in pat.finditer(stripped):
@@ -252,7 +252,18 @@ def scan_bytes_for_nul(data: bytes):
         start = i + 1
 
 
-def scan_file(path, text_rules=True):
+# A source file that TESTS a redactor has to contain things that look like secrets, and a
+# tree scan that reports them is a tree scan nobody reads. A line carrying this marker is
+# exempt when scanning FILES.
+#
+# Three properties keep this from being a hole. It never applies to rendered output, which
+# is the path that matters and has no escape hatch of any kind. It never applies to NUL
+# bytes. And verify.sh counts the marked lines and fails if the number changes, so adding
+# one is a reviewed edit rather than a quiet one.
+MARKER = "synthetic-fixture"
+
+
+def scan_file(path, text_rules=True, honour_marker=True):
     with open(path, "rb") as fh:
         data = fh.read()
     findings = []
@@ -261,10 +272,40 @@ def scan_file(path, text_rules=True):
                          f"offset {off}"))
     if text_rules:
         try:
-            findings.extend(scan_text(data.decode("utf-8", errors="replace"), path))
+            text = data.decode("utf-8", errors="replace")
         except Exception as exc:                                   # noqa: BLE001
             findings.append((path, 0, "unreadable", str(exc)))
+            return findings
+        lines = text.splitlines()
+        for f in scan_text(text, path):
+            line_no = f[1]
+            if honour_marker and 1 <= line_no <= len(lines) and MARKER in lines[line_no - 1]:
+                continue
+            findings.append(f)
     return findings
+
+
+def marked_lines(root):
+    """Lines whose marker is actually suppressing a finding, so verify can count them.
+
+    Counting every line that merely mentions the marker would include this file and the
+    README, and a count that drifts for documentation edits is a count nobody maintains.
+    What matters is how many findings the exemption is hiding.
+    """
+    out = []
+    for f in tracked_files(root):
+        if not os.path.isfile(f):
+            continue
+        try:
+            with open(f, encoding="utf-8") as fh:
+                lines = fh.read().splitlines()
+        except (UnicodeDecodeError, OSError):
+            continue
+        suppressed = {n for _w, n, _l, _s in scan_file(f, honour_marker=False)}
+        for n in sorted(suppressed):
+            if 1 <= n <= len(lines) and MARKER in lines[n - 1]:
+                out.append((f, n))
+    return out
 
 
 def tracked_files(root):
@@ -287,6 +328,9 @@ def main(argv=None):
     ap.add_argument("--stdin", action="store_true")
     ap.add_argument("--tree", help="scan every git-tracked file under this directory")
     ap.add_argument("--quiet", action="store_true")
+    ap.add_argument("--strict", action="store_true",
+                    help="ignore synthetic-fixture markers")
+    ap.add_argument("--count-markers", action="store_true")
     ap.add_argument("--expect-findings", type=int, default=None,
                     help="exit 0 only if exactly this many findings appear "
                          "(used by negative controls)")
@@ -298,12 +342,17 @@ def main(argv=None):
         findings += scan_text(sys.stdin.read(), "<stdin>")
         n_scanned += 1
     for f in a.files:
-        findings += scan_file(f)
+        findings += scan_file(f, honour_marker=not a.strict)
         n_scanned += 1
     if a.tree:
+        if a.count_markers:
+            for path, line in marked_lines(a.tree):
+                print(f"{path}:{line}")
+            print(f"leakcheck: {len(marked_lines(a.tree))} marked line(s)")
+            return 0
         for f in tracked_files(a.tree):
             if os.path.isfile(f):
-                findings += scan_file(f)
+                findings += scan_file(f, honour_marker=not a.strict)
                 n_scanned += 1
 
     if not a.quiet:

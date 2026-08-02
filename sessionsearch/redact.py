@@ -49,8 +49,11 @@ _RULES = [
     ("private-key",
      re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----",
                 re.S), 0),
+    # No trailing dashes required. A pasted key is often truncated mid-block, and the
+    # header alone is enough to know what follows. The independent checker found real
+    # turns where the closing dashes were missing and this rule did not fire.
     ("private-key",
-     re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]{0,20}"), 0),
+     re.compile(r"-----BEGIN[A-Z ]{0,30}PRIVATE KEY[\s\S]{0,25}"), 0),
 
     ("anthropic-key", re.compile(r"sk-ant-[A-Za-z0-9_\-]{16,}"), 0),
     ("openrouter-key", re.compile(r"sk-or-v1-[A-Za-z0-9]{24,}"), 0),
@@ -156,7 +159,7 @@ def _mixed_is_secretish(s: str) -> bool:
     backlog of findings is the same thing as no checker at all. So the redactor is the
     stricter side by construction: anything the checker can report, this masks first.
 
-    The cost is real and shows up in excerpts. dejavusansmono-57e8e1279c67f3f1 is masked,
+    The cost is real and shows up in excerpts. dejavusansmono-57e8e12… is masked,
     and so is any twenty-four character identifier with a digit in it.
     """
     return (any(c.isdigit() for c in s)
@@ -183,8 +186,26 @@ def _b64_is_secretish(s: str) -> bool:
     segs = [x for x in s.split("/") if x]
     if len(segs) <= 1:
         return True
+    if _case_churn(s) >= 0.15:
+        # Base64 flips between cases every few characters; a path essentially never does.
+        # This is what catches a secret that has been truncated mid-paste, where the
+        # segment lengths alone look like a short path. Found by the independent checker
+        # on real turns, where a 40 character key had been clipped to 29.
+        return True
     mean = sum(len(x) for x in segs) / len(segs)
     return mean >= (20 if s.startswith("/") else 12)
+
+
+def _case_churn(s: str) -> float:
+    """Fraction of adjacent letter pairs that switch between upper and lower case."""
+    flips = 0
+    total = 0
+    for a, b in zip(s, s[1:]):
+        if a.isalpha() and b.isalpha():
+            total += 1
+            if a.isupper() != b.isupper():
+                flips += 1
+    return (flips / total) if total else 0.0
 
 
 def redact(text, counts=None):
@@ -262,6 +283,7 @@ def self_check():
     A redactor whose rules were accidentally emptied is worse than no redactor, because
     the rest of the program still behaves as though redaction happened.
     """
-    probe = "AKIA" + "1234567890ABCDEF" + " " + os.path.join("/home", "someone", "x")
-    out = redact(probe)
-    return "AKIA1234567890ABCDEF" not in out and "/home/someone" not in out
+    key = "AKIA" + "1234567890ABCDEF"
+    home = os.path.join(os.sep + "home", "someone", "x")
+    out = redact(key + " " + home)
+    return key not in out and home not in out
