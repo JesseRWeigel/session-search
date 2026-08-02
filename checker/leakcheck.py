@@ -50,7 +50,8 @@ SIGNATURES = [
     ("google api key", re.compile(r"AIza[0-9A-Za-z_\-]{30,}")),
     ("slack token", re.compile(r"xox[a-z]-[0-9A-Za-z\-]{10,}")),
     ("slack or discord webhook",
-     re.compile(r"https://(?:hooks\.slack\.com|discord(?:app)?\.com/api)/\S{8,}")),
+     re.compile(r"https://(?:hooks\.slack\.com/services|"
+                r"discord(?:app)?\.com/api/webhooks)/\S{8,}")),
     ("huggingface token", re.compile(r"hf_[0-9A-Za-z]{25,}")),
     ("npm token", re.compile(r"npm_[0-9A-Za-z]{30,}")),
     ("gitlab token", re.compile(r"glpat-[0-9A-Za-z_\-]{16,}")),
@@ -63,8 +64,8 @@ SIGNATURES = [
     # pattern jump a masked value and match the NEXT assignment on the same line, which
     # reported a leak in redacted output that contained none.
     ("secret shaped assignment",
-     re.compile(r"(?i)(?:pass(?:word|wd)?|secret|token|api[_-]?key|access[_-]?key)"
-                r"['\"]?\s{0,2}[=:]\s{0,2}['\"]?[^\s'\";,)]{10,}")),
+     re.compile(r"(?i)(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key)"
+                r"['\"]?\s{0,2}[=:]\s{0,2}['\"]?[^\s'\";,]{10,}")),
     # A real username: letters, digits, dot, dash, underscore. Not '<user>', not a
     # character class, so this file and the redactor can both talk about the pattern in
     # prose without tripping it, while an actual home directory still does.
@@ -80,11 +81,78 @@ SIGNATURES = [
      re.compile(r"(?<![\d.\-])(?:\+?1[ .\-])?\(?\d{3}\)?[ .\-]\d{3}[ .\-]\d{4}(?![\d.\-])")),
 ]
 
+# Some signatures need a second opinion on the match before it counts. Kept as a separate
+# table so the patterns above stay readable, and so that loosening a validator is a
+# visible edit rather than a quiet character-class change.
+_DOTTED_IDENT = re.compile(r"\A[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+\Z")
+_CODE_CHARS = set("[]{}()<>$&|;`")
+
+
+def _assignment_value_looks_secret(match: str) -> bool:
+    """Reject the shapes that made this signature cry wolf on 51 881 real turns.
+
+    All of these are code or prose ABOUT secrets rather than secrets:
+
+        Secret: process.env.JWT_SECRET     a dotted identifier
+        pass=0\\nfail=0                     an escaped newline let the value run on
+        Token = slashParts[1]              an expression
+        secret: environment                a bare word
+
+    A real credential is either mixed case-and-digits or long. One character class and
+    under twenty characters is a word, and words are not secrets.
+    """
+    _key, _sep, value = match.partition("=" if "=" in match else ":")
+    value = value.strip().strip("'\"")
+    if not value or "\\" in value:
+        return False
+    if _DOTTED_IDENT.match(value):
+        return False
+    if any(c in _CODE_CHARS for c in value):
+        return False
+    return classes(value) >= 2 or len(value) >= 20
+
+
+VALIDATORS = {"secret shaped assignment": _assignment_value_looks_secret}
+
 # Anything this long that looks random is suspect whatever service issued it.
 ENTROPY_MIN_LEN = 24
 ENTROPY_MIN_BITS = 3.7
 TOKEN_SPLIT = re.compile(r"[^A-Za-z0-9+/=_\-]+")
 HEXISH = re.compile(r"\A[0-9a-fA-F]{32,}\Z")
+
+# Structural shapes that are long and random-looking and still cannot be a credential.
+# They are STRIPPED from the token rather than excusing it, so SESSION=<timestamp> loses
+# the timestamp and is then too short to report, while <timestamp><real secret> keeps the
+# secret and is reported. An allowlist that excuses a whole token is how an auditor goes
+# blind; removing the part you can account for is not.
+NOT_A_SECRET = [
+    re.compile(r"\d{4}-\d{2}-\d{2}[T_\- ]\d{2}[-:]\d{2}[-:]\d{2}"
+               r"(?:[.\-]\d{1,6})?Z?"),                              # ISO 8601 timestamp
+    re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}"
+               r"-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"),                  # RFC 4122 uuid
+    re.compile(r"\b(?:toolu|call|req|msg|rs|fc|ctc|chatcmpl)_[A-Za-z0-9]{8,}\b"),
+]
+
+# Separator handling for the entropy sweep.
+#
+# Run against 51 881 real turns, the sweep's entire false-positive population was
+# separator-joined names: nvidia/nemotron-3-ultra-550b-a55b, this-package-does-not-exist-
+# 9f3a2b, claude-worktrees-agent-ab469e5a. Each scores three character classes and full
+# Shannon entropy while being ordinary readable text.
+#
+# What separates them from credentials is not vocabulary, it is contiguity. A credential
+# is an unbroken run of random characters. So the sweep looks at the longest unbroken run
+# inside a token, and only considers the token as a whole when it has at most two
+# separators, which is what keeps the AWS example secret wJalrXUtnFEMI/K7MDENG/bPxRfiC...
+# reportable while a five-segment path is not.
+_IDENT_SPLIT = re.compile(r"[_\-/=+]")
+# A directory name. Two tests, both cheap: the character set, and no two consecutive
+# capitals. GraphiteDawnCache, GitHub, shell-snapshots and 40achingbrain are names.
+# wJalrXUtnFEMI and K7MDENG are not, because base64 puts capitals next to each other and
+# CamelCase does not, which is what keeps the AWS example secret reportable.
+_PATH_SEGMENT = re.compile(r"\A-?[A-Za-z0-9][A-Za-z0-9._\-]*\Z")
+_TWO_CAPITALS = re.compile(r"[A-Z]{2}")
+MAX_SEPARATORS_FOR_WHOLE_TOKEN = 2
 
 # The redactor's own output. Recognised so the checker does not report the mask as a leak,
 # and deliberately narrow: only the exact bracketed form, never a bare word.
@@ -109,27 +177,47 @@ def classes(s: str) -> int:
 def _looks_like_path(tok: str) -> bool:
     """Long runs that are really paths are common and are not secrets by themselves.
 
-    A separate signature catches home directories, so this only decides whether the
-    entropy sweep should shout. Kept independent of the redactor's version of the same
-    idea: here the test is that the token contains a slash and any segment is a short
-    word, which is a different question from the redactor's average-segment-length test.
+    The test is the segments BEFORE the last one. A path is a chain of directory names and
+    those are words, so /Projects/tasks/<17 hex characters> is a path. The AWS
+    documentation example secret wJalrXUtnFEMI/K7MDENG/bPxRfiC... is not, because K7MDENG
+    is not a word, and it stays reportable.
     """
     if "/" not in tok:
         return False
     segs = [s for s in tok.split("/") if s]
-    return len(segs) >= 2 and sum(1 for s in segs if len(s) <= 12) >= len(segs) - 1
+    return len(segs) >= 2 and all(_PATH_SEGMENT.match(s) and not _TWO_CAPITALS.search(s)
+                                   for s in segs[:-1])
+
+
+def _random_looking(tok: str) -> bool:
+    """Does this unbroken run look like credential material rather than a word."""
+    if len(tok) < ENTROPY_MIN_LEN:
+        return False
+    if HEXISH.match(tok):
+        return True
+    # A digit is required because a long SCREAMING_SNAKE identifier scores three character
+    # classes and full Shannon entropy without being random at all.
+    return (classes(tok) >= 3 and any(c.isdigit() for c in tok)
+            and shannon(tok) >= ENTROPY_MIN_BITS and not _looks_like_path(tok))
 
 
 def entropy_findings(text: str):
     out = []
-    for tok in TOKEN_SPLIT.split(text):
-        if len(tok) < ENTROPY_MIN_LEN:
+    for raw in TOKEN_SPLIT.split(text):
+        if len(raw) < ENTROPY_MIN_LEN:
             continue
-        if HEXISH.match(tok):
-            out.append(("high entropy hex run", tok))
+        tok = raw
+        for pat in NOT_A_SECRET:
+            tok = pat.sub("", tok)
+        parts = [p for p in _IDENT_SPLIT.split(tok) if p]
+        separators = max(0, len(parts) - 1)
+        label = "high entropy hex run" if HEXISH.match(tok) else "high entropy token"
+        if separators <= MAX_SEPARATORS_FOR_WHOLE_TOKEN and _random_looking(tok):
+            out.append((label, tok))
             continue
-        if classes(tok) >= 3 and shannon(tok) >= ENTROPY_MIN_BITS and not _looks_like_path(tok):
-            out.append(("high entropy token", tok))
+        longest = max(parts, key=len) if parts else ""
+        if _random_looking(longest):
+            out.append((label, longest))
     return out
 
 
@@ -137,12 +225,16 @@ def scan_text(text: str, where="<text>"):
     """Return a list of (where, line_no, label, matched_snippet)."""
     findings = []
     for line_no, line in enumerate(text.splitlines(), 1):
-        # Masks collapse to a single short token rather than to whitespace: replacing
+        # Masks collapse to a single character that no signature can build on: replacing
         # them with a space let the assignment pattern read across the gap and pair a key
-        # name with the next line's value.
-        stripped = MASK.sub("X", line)
+        # name with the next line's value, and replacing them with a letter turned
+        # postgres://MASK@db.example.com into an email address.
+        stripped = MASK.sub("·", line)
         for label, pat in SIGNATURES:
             for m in pat.finditer(stripped):
+                validator = VALIDATORS.get(label)
+                if validator and not validator(m.group(0)):
+                    continue
                 findings.append((where, line_no, label, m.group(0)))
         for label, tok in entropy_findings(stripped):
             findings.append((where, line_no, label, tok))

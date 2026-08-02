@@ -15,12 +15,14 @@ What is redacted, and why each category is here:
   url credentials      user:password@host in a connection string
   assignments          KEY=value / "token": "value" where the key name says secret
   addresses            anything@anything, which covers email and user@host
-  home paths           /home/<user>, /Users/<user>, C:\\Users\\<user> collapse to ~
+  home paths           unix and windows home directories collapse to ~, including the
+                       flattened -home-name-Projects form Claude uses for directory names
+  username             the local account name wherever it appears as a standalone word
   private hosts        RFC1918 addresses and .local/.lan/.internal names. Loopback is
                        left alone on purpose: 127.0.0.1 is not a private fact and
                        redacting it makes real output unreadable for no gain.
   phone numbers        separator-bearing NANP shapes only
-  high entropy         any 32+ character run mixing case and digits, plus any 32+ hex run
+  high entropy         any 24+ character run mixing case and digits, plus any 24+ hex run
   control bytes        escaped, so one NUL cannot turn a captured output file binary and
                        make every later text audit skip it without saying so
 
@@ -76,9 +78,12 @@ _RULES = [
     ("bearer-token",
      re.compile(r"(?i)(?<=bearer )[A-Za-z0-9._\-+/=]{16,}"), 0),
 
+    # The boundary is written as a lookaround rather than \b because the key name is
+    # usually the TAIL of a longer identifier: GITHUB_TOKEN, MY_API_KEY. \b does not fire
+    # between an underscore and a letter, so the \b version missed every real env var.
     ("secret-assignment",
-     re.compile(r'(?i)\b(?:' + _SECRET_KEY_WORDS + r')\b["\']?\s*[:=]\s*["\']?'
-                r'([^\s"\',;)]{8,})'), 1),
+     re.compile(r'(?i)(?<![A-Za-z0-9])(?:' + _SECRET_KEY_WORDS +
+                r')(?![A-Za-z0-9])["\']?\s*[:=]\s*["\']?([^\s"\',;)]{8,})'), 1),
 
     ("address", re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9][A-Za-z0-9.\-]*\.[A-Za-z]{2,}"), 0),
     ("address", re.compile(r"\b[a-z_][a-z0-9_.\-]*@[a-z0-9][a-z0-9\-]{2,}\b"), 0),
@@ -89,7 +94,30 @@ _HOME_RULES = [
     re.compile(r"/Users/[A-Za-z0-9._\-]+"),
     re.compile(r"[Cc]:\\+Users\\+[A-Za-z0-9._\-]+"),
     re.compile(r"/root(?=/|\b)"),
+    # Claude Code names each project directory after the flattened cwd, so the archive is
+    # full of strings like -home-alice-Projects-thing with no slash anywhere in them. The
+    # independent checker found these surviving a redaction pass that only knew about
+    # /home/, which is precisely the leak a shared-code checker would have missed.
+    re.compile(r"[-_]home[-_][A-Za-z0-9._]+"),
+    re.compile(r"[-_]Users[-_][A-Za-z0-9._]+"),
 ]
+
+
+def _user_pattern():
+    """The local account name, masked wherever it appears as a word.
+
+    Path rules cover ~/, but a username also turns up bare: in a prompt, in a git author
+    line, in an ssh target, in output from `whoami`. Names shorter than four characters
+    are skipped because a two-letter login collides with ordinary words far too often to
+    be worth it, and that trade is stated rather than hidden.
+    """
+    name = os.path.basename(os.path.expanduser("~")).strip()
+    if len(name) < 4 or not name.replace("_", "").replace("-", "").isalnum():
+        return None
+    return re.compile(r"(?i)(?<![A-Za-z0-9])" + re.escape(name) + r"(?![A-Za-z0-9])")
+
+
+_USER_RE = _user_pattern()
 
 _PRIVATE_IP = re.compile(
     r"\b(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}"
@@ -108,19 +136,31 @@ _CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 _CONTROL_NAMES = {"\x00": "\\0", "\x1b": "\\e", "\x07": "\\a", "\x08": "\\b",
                   "\x0b": "\\v", "\x0c": "\\f", "\r": "\\r"}
 
-_HEX_RUN = re.compile(r"\b[0-9a-fA-F]{32,}\b")
-_B64_RUN = re.compile(r"[A-Za-z0-9+/=]{32,}")
-_MIXED_RUN = re.compile(r"[A-Za-z0-9+=_\-]{32,}")
+# 24, not 32, because the independent checker treats 24 as the length at which a random
+# run becomes credential-shaped, and a redactor that masks less than its auditor reports
+# guarantees a permanent backlog of findings that everyone learns to ignore. The cost is
+# real and is stated in the README: long camelCase identifiers get masked too.
+_RUN_MIN = 24
+_HEX_RUN = re.compile(r"\b[0-9a-fA-F]{%d,}\b" % _RUN_MIN)
+_B64_RUN = re.compile(r"[A-Za-z0-9+/=]{%d,}" % _RUN_MIN)
+_MIXED_RUN = re.compile(r"[A-Za-z0-9+=_\-]{%d,}" % _RUN_MIN)
 
 
 def _mixed_is_secretish(s: str) -> bool:
-    """A 32+ character run counts as secret-shaped when it mixes three character classes.
+    """A long run counts as secret-shaped when it carries a digit and a letter.
 
-    Three classes, not two, so that kebab-case identifiers and long dashed paths survive.
+    This is deliberately blunter than it needs to be, and the reason is worth stating. The
+    independent checker reports any 24+ character run with three character classes, a
+    digit and high Shannon entropy. If the redactor were the more permissive of the two,
+    every run would produce a standing finding that nobody could clear, and a permanent
+    backlog of findings is the same thing as no checker at all. So the redactor is the
+    stricter side by construction: anything the checker can report, this masks first.
+
+    The cost is real and shows up in excerpts. dejavusansmono-57e8e1279c67f3f1 is masked,
+    and so is any twenty-four character identifier with a digit in it.
     """
-    return (any(c.islower() for c in s)
-            and any(c.isupper() for c in s)
-            and any(c.isdigit() for c in s))
+    return (any(c.isdigit() for c in s)
+            and any(c.isalpha() for c in s))
 
 
 def _b64_is_secretish(s: str) -> bool:
@@ -175,6 +215,10 @@ def redact(text, counts=None):
     for pat in _HOME_RULES:
         text, n = pat.subn("~", text)
         bump("home-path", n)
+
+    if _USER_RE is not None:
+        text, n = _USER_RE.subn(PLACEHOLDER.format("username"), text)
+        bump("username", n)
 
     text, n = _PRIVATE_IP.subn(PLACEHOLDER.format("private-ip"), text)
     bump("private-ip", n)
