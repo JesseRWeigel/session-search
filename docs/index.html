@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>session-search: make every AI session searchable</title>
+<style>
+:root {
+  --bg: #fbfaf7; --fg: #14171a; --muted: #5b6570; --line: #dfdcd4;
+  --card: #ffffff; --accent: #7b3f00; --code: #f2efe9; --hit: #ffe9a8;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161a; --fg: #e8e6e1; --muted: #9aa3ad; --line: #2c3138;
+    --card: #1b1e23; --accent: #e0a458; --code: #21252b; --hit: #5c4a13;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14161a; --fg: #e8e6e1; --muted: #9aa3ad; --line: #2c3138;
+  --card: #1b1e23; --accent: #e0a458; --code: #21252b; --hit: #5c4a13;
+  color-scheme: dark;
+}
+:root[data-theme="light"] {
+  --bg: #fbfaf7; --fg: #14171a; --muted: #5b6570; --line: #dfdcd4;
+  --card: #ffffff; --accent: #7b3f00; --code: #f2efe9; --hit: #ffe9a8;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 0 1rem 4rem;
+  background: var(--bg); color: var(--fg);
+  font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+main { max-width: 46rem; margin: 0 auto; }
+header { padding: 2.5rem 0 1rem; border-bottom: 1px solid var(--line); }
+h1 { font-size: 1.75rem; line-height: 1.2; margin: 0 0 .4rem; letter-spacing: -.02em; }
+h2 { font-size: 1.15rem; margin: 2.5rem 0 .6rem; letter-spacing: -.01em; }
+h3 { font-size: .95rem; margin: 1.6rem 0 .4rem; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .08em; }
+p { margin: .6rem 0; }
+.lede { color: var(--muted); margin: 0; }
+code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+             font-size: .85em; }
+code { background: var(--code); padding: .1em .35em; border-radius: 3px;
+        overflow-wrap: anywhere; }
+pre { background: var(--code); padding: .75rem; border-radius: 6px;
+       overflow-x: auto; margin: .8rem 0; }
+pre code { background: none; padding: 0; }
+.tablewrap { overflow-x: auto; margin: .8rem 0; }
+table { border-collapse: collapse; width: 100%; min-width: 20rem; }
+th, td { text-align: left; padding: .35rem .6rem .35rem 0; vertical-align: top;
+          border-bottom: 1px solid var(--line); font-size: .92rem; }
+th { color: var(--muted); font-weight: 600; }
+.formula { background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+            padding: .9rem 1rem; margin: 1rem 0; }
+.formula b { color: var(--accent); }
+form { margin: 1rem 0 .5rem; display: flex; gap: .5rem; flex-wrap: wrap; }
+input[type=search] {
+  flex: 1 1 12rem; min-width: 0; padding: .55rem .7rem; font: inherit;
+  background: var(--card); color: var(--fg);
+  border: 1px solid var(--line); border-radius: 6px;
+}
+select, button {
+  padding: .55rem .7rem; font: inherit; background: var(--card); color: var(--fg);
+  border: 1px solid var(--line); border-radius: 6px; max-width: 100%;
+}
+button { cursor: pointer; }
+.hit { border: 1px solid var(--line); border-left: 3px solid var(--accent);
+        background: var(--card); border-radius: 6px; padding: .6rem .8rem;
+        margin: .6rem 0; }
+.hit .meta { color: var(--muted); font-size: .82rem; display: flex;
+              flex-wrap: wrap; gap: .1rem .8rem; }
+.hit .why { color: var(--muted); font-size: .82rem; margin-top: .3rem; }
+.hit .body { margin-top: .35rem; overflow-wrap: anywhere; }
+.hit mark { background: var(--hit); color: inherit; padding: 0 .1em; }
+.score { display: inline-block; min-width: 1.9rem; text-align: right;
+          font-weight: 700; color: var(--accent); }
+.note { color: var(--muted); font-size: .88rem; }
+footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--line);
+          color: var(--muted); font-size: .85rem; }
+#selftest { font-size: .75rem; color: var(--muted); overflow-wrap: anywhere; }
+.grid { display: grid; gap: .6rem; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); }
+.stat { background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+         padding: .7rem .8rem; min-width: 0; }
+.stat b { display: block; font-size: 1.3rem; letter-spacing: -.02em; }
+.stat span { color: var(--muted); font-size: .8rem; }
+</style>
+</head>
+<body>
+
+<main>
+<header>
+  <h1>Make every AI session you have ever run searchable</h1>
+  <p class="lede">Six months of Claude Code and Codex transcripts, indexed locally, ranked
+  by a rule you can read, and redacted before anything reaches your screen.</p>
+</header>
+
+<h2>The numbers, from the real archive</h2>
+<div class="grid">
+  <div class="stat"><b>874</b><span>sessions</span></div>
+  <div class="stat"><b>51,881</b><span>turns</span></div>
+  <div class="stat"><b>137 MB</b><span>index</span></div>
+  <div class="stat"><b>3.7 s</b><span>full rebuild</span></div>
+  <div class="stat"><b>1.3 ms</b><span>median query</span></div>
+  <div class="stat"><b>0</b><span>leaks found in redacted output</span></div>
+</div>
+<p class="note">Measured 2026-08-01 over 770
+transcript files, 0.57 GB of raw JSONL, spanning
+2026-01-27 to 2026-08-01. None of that content is in this page or in the
+repository. The demo below runs on a synthetic fixture archive instead.</p>
+
+<h2>A transcript is not a blob of text</h2>
+<p>Grep over the raw JSONL treats a shell command, the file it read, the traceback it
+printed and the sentence you typed as the same kind of evidence. They are not. Every turn
+is classified once, at parse time, and everything downstream keys off that.</p>
+<div class="tablewrap">
+<table>
+  <thead><tr><th>kind</th><th>points</th><th>what it is</th></tr></thead>
+  <tbody>
+      <tr><td><code>user_request</code></td><td>5</td><td>something you typed</td></tr>
+      <tr><td><code>error</code></td><td>4</td><td>a tool result flagged as an error, or one that opens like a traceback</td></tr>
+      <tr><td><code>assistant_text</code></td><td>3</td><td>prose the model wrote</td></tr>
+      <tr><td><code>tool_input</code></td><td>2</td><td>a tool call and its arguments, including the file it touched</td></tr>
+      <tr><td><code>tool_output</code></td><td>1</td><td>what the tool printed</td></tr>
+      <tr><td><code>thinking</code></td><td>1</td><td>extended thinking and Codex reasoning summaries</td></tr>
+      <tr><td><code>meta</code></td><td>0</td><td>system reminders and injected commands, excluded unless asked for</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>The ranking rule, in full</h2>
+<p>No learned model and no bm25. The score is the sum of four named integers, and the tool
+will print them next to any result with <code>--explain</code>.</p>
+<div class="formula">
+  <p><b>score = kind + terms + phrase + recency</b></p>
+  <p><b>kind</b> from the table above.<br>
+  <b>terms</b>: 2 points per distinct query term present. Repeats earn
+  nothing, so a log line that screams one word two hundred times cannot outrank a sentence
+  that uses every word once.<br>
+  <b>phrase</b>: 3 points if every term fits inside one
+  60 character window.<br>
+  <b>recency</b>: 3 within a week, 2 within a month, 1 within six months, 0 beyond.</p>
+  <p class="note">Ties break on newer first, then session, then position, so two runs over
+  the same index return the same order.</p>
+</div>
+
+<h2>Try it</h2>
+<p class="note">Running against the synthetic fixture archive that the test suite uses:
+8 sessions, 31 turns,
+with known content planted in it. Nothing here comes from a real transcript.</p>
+<form id="q" onsubmit="return false">
+  <input type="search" id="query" value="crlf importer" aria-label="query"
+         autocomplete="off" spellcheck="false">
+  <select id="kind" aria-label="kind filter">
+    <option value="">every kind</option>
+  </select>
+  <button type="button" id="explain">explain</button>
+</form>
+<div id="results"></div>
+
+<h2>Nothing derived from the archive is committed</h2>
+<p>The index holds raw transcript text, so it lives outside the repository, under
+<code>~/.local/share/session-search</code>, and <code>*.db</code> is gitignored as a
+second line of defence. Everything on its way to a terminal or a file goes through one
+redactor. The redactor's output is then audited by a checker written separately, sharing
+no code and no patterns with it, because a leak check that reuses the filter's own regex
+inherits the filter's own bug and reports clean.</p>
+<p>The audit runs over every turn in the real archive, not a sample:
+<b id="auditline">51,881 turns, 0 findings</b>. It also scans for NUL bytes in
+Python rather than with grep, because one NUL byte makes a file binary to
+<code>git grep</code>, which then skips it in silence and reports a clean tree it never
+read.</p>
+
+<h2>What it does not do</h2>
+<p>Attachment records are not indexed. In this archive they are harness injections rather
+than conversation: tool listings, skill listings, task reminders. Codex reasoning blobs
+are not indexed either, because they are encrypted and contain no searchable text. Both
+counts are printed at index time, so the part you are not searching is visible instead of
+implied. There is no <code>--no-redact</code> flag, and there will not be one.</p>
+
+<footer>
+  <p>MIT licensed. Python 3 and its standard library, no dependencies.
+  <button type="button" id="theme">toggle theme</button></p>
+  <p id="selftest">script has not run</p>
+</footer>
+</main>
+
+<script id="data" type="application/json">{"corpus":[{"session":"aa11bb22","source":"claude_code","project":"/tmp/demo/widget","title":"Fix CRLF handling in the CSV importer","seq":0,"ageDays":53,"kind":"user_request","tool":"","target":"","text":"The CSV importer chokes on CRLF line endings. Please fix the parser so a file with \\r\\n loads correctly."},{"session":"aa11bb22","source":"claude_code","project":"/tmp/demo/widget","title":"Fix CRLF handling in the CSV importer","seq":1,"ageDays":53,"kind":"thinking","tool":"","target":"","text":"The splitter uses split('\\n') which leaves a stray carriage return on every field."},{"session":"aa11bb22","source":"claude_code","project":"/tmp/demo/widget","title":"Fix CRLF handling in the CSV importer","seq":2,"ageDays":53,"kind":"tool_input","tool":"Read","target":"/tmp/demo/widget/importer.py","text":"Read {\"file_path\": \"/tmp/demo/widget/importer.py\"}"},{"session":"aa11bb22","source":"claude_code","project":"/tmp/demo/widget","title":"Fix CRLF handling in the CSV importer","seq":3,"ageDays":53,"kind":"tool_output","tool":"Read","target":"","text":"def load(text):\n    return [l.split(',') for l in text.split('\\n')]"},{"session":"aa11bb22","source":"claude_code","project":"/tmp/demo/widget","title":"Fix CRLF handling in the CSV importer","seq":4,"ageDays":53,"kind":"tool_input","tool":"Bash","target":"python3 -m pytest tests/test_csv.py","text":"Bash {\"command\": \"python3 -m pytest tests/test_csv.py\"}"},{"session":"aa11bb22","source":"claude_code","project":"/tmp/demo/widget","title":"Fix CRLF handling in the CSV importer","seq":5,"ageDays":53,"kind":"error","tool":"Bash","target":"","text":"AssertionError: expected 3 rows, got 1\nFAILED tests/test_csv.py::test_crlf"},{"session":"aa11bb22","source":"claude_code","project":"/tmp/demo/widget","title":"Fix CRLF handling in the CSV importer","seq":6,"ageDays":53,"kind":"tool_input","tool":"Edit","target":"/tmp/demo/widget/importer.py","text":"Edit {\"file_path\": \"/tmp/demo/widget/importer.py\", \"old_string\": \"text.split\", \"new_string\": \"x\"}"},{"session":"aa11bb22","source":"claude_code","project":"/tmp/demo/widget","title":"Fix CRLF handling in the CSV importer","seq":7,"ageDays":53,"kind":"tool_output","tool":"Edit","target":"","text":"The file has been updated."},{"session":"aa11bb22","source":"claude_code","project":"/tmp/demo/widget","title":"Fix CRLF handling in the CSV importer","seq":8,"ageDays":53,"kind":"assistant_text","tool":"","target":"","text":"Fixed: the importer now strips the carriage return before splitting, so CRLF files parse as three rows."},{"session":"aa11bb22","source":"claude_code","project":"/tmp/demo/widget","title":"Fix CRLF handling in the CSV importer","seq":9,"ageDays":53,"kind":"tool_input","tool":"Bash","target":"python3 -m pytest tests/test_csv.py","text":"Bash {\"command\": \"python3 -m pytest tests/test_csv.py\"}"},{"session":"aa11bb22","source":"claude_code","project":"/tmp/demo/widget","title":"Fix CRLF handling in the CSV importer","seq":10,"ageDays":53,"kind":"tool_output","tool":"Bash","target":"","text":"3 passed in 0.04s"},{"session":"aa11bb22","source":"claude_code","project":"/tmp/demo/noise","title":"","seq":0,"ageDays":52,"kind":"user_request","tool":"","target":"","text":"Run the log dump."},{"session":"aa11bb22","source":"claude_code","project":"/tmp/demo/noise","title":"","seq":1,"ageDays":52,"kind":"tool_input","tool":"Bash","target":"cat build.log","text":"Bash {\"command\": \"cat build.log\"}"},{"session":"aa11bb22","source":"claude_code","project":"/tmp/demo/noise","title":"","seq":2,"ageDays":52,"kind":"tool_output","tool":"Bash","target":"","text":"line 0: crlf crlf importer crlf normalised\nline 1: crlf crlf importer crlf normalised\nline 2: crlf crlf importer crlf normalised\nline 3: crlf crlf importer crlf normalised\nline 4: crlf crlf importer crlf normalised\nline 5: crlf crlf importer crlf normalised\nline 6: crlf crlf importer crlf normalised\nline 7: crlf crlf importer crlf normalised\nline 8: crlf crlf importer crlf normalised\nline 9: crlf crlf importer crlf normalised\nline 10: crlf crlf importer crlf normalised\nline 11: crlf crlf importer crlf normalised\nline 12: crlf crlf importer crlf normalised\nline 13: crlf crlf importer crlf normalised\nline 14: crlf crlf importer crlf normalised\nline 15: crlf crlf importer crlf normalised\nline 16: crlf crlf importer crlf normalised\nline 17: crlf crlf importer crlf normalised\nline 18: crlf crlf importer crlf normalised\nline 19: crlf crlf importer crlf normalised\nline 20: crlf crlf importer crlf normalised\nline 21: crlf crlf importer crlf normalised\nline 22: crlf crlf importer crlf normalised\nline 23: crlf crlf importer crlf normalised\nline 24: crlf crlf importer crlf normalised\nline 25: crlf crlf importer crlf normalised\nline 26: crlf crlf importer crlf normalised\nline 27: crlf crlf imp"},{"session":"aa11bb22","source":"claude_code","project":"/tmp/demo/secrets","title":"","seq":0,"ageDays":51,"kind":"user_request","tool":"","target":"","text":"Here is the key, put it in the env: [redacted:anthropic-key] and the deploy token [redacted:github-token]"},{"session":"aa11bb22","source":"claude_code","project":"/tmp/demo/secrets","title":"","seq":1,"ageDays":51,"kind":"assistant_text","tool":"","target":"","text":"Stored. The AWS id [redacted:aws-access-key-id] and secret [redacted:high-entropy] go in ~/.aws."},{"session":"aa11bb22","source":"claude_code","project":"/tmp/demo/secrets","title":"","seq":2,"ageDays":51,"kind":"tool_input","tool":"Bash","target":"env | grep -i key","text":"Bash {\"command\": \"env | grep -i key\"}"},{"session":"aa11bb22","source":"claude_code","project":"/tmp/demo/secrets","title":"","seq":3,"ageDays":51,"kind":"tool_output","tool":"Bash","target":"","text":"OPENAI_API_KEY=[redacted:secret-assignment]\nDATABASE_URL=postgres://[redacted:url-credentials]@[redacted:private-host]:5432/app\nGOOGLE_KEY=[redacted:google-api-key]\nSLACK=[redacted:slack-token]\nJWT=[redacted:jwt]\ncontact [redacted:address] from [redacted:private-ip] on [redacted:private-host]\nhome is ~/Projects and ~/dev\nphone [redacted:phone]"},{"session":"aa11bb22","source":"claude_code","project":"/tmp/demo/secrets","title":"","seq":4,"ageDays":51,"kind":"tool_input","tool":"Bash","target":"hexdump -C blob.bin","text":"Bash {\"command\": \"hexdump -C blob.bin\"}"},{"session":"aa11bb22","source":"claude_code","project":"/tmp/demo/secrets","title":"","seq":5,"ageDays":51,"kind":"tool_output","tool":"Bash","target":"","text":"raw bytes follow\\0and continue after the NUL byte"},{"session":"aa11bb22","source":"claude_code","project":"/tmp/demo/other","title":"","seq":0,"ageDays":50,"kind":"user_request","tool":"","target":"","text":"Add a changelog entry for the release."},{"session":"aa11bb22","source":"claude_code","project":"/tmp/demo/other","title":"","seq":1,"ageDays":50,"kind":"assistant_text","tool":"","target":"","text":"Added CHANGELOG.md with the 1.2.0 section."},{"session":"aa11bb22","source":"claude_code","project":"/tmp/demo/other","title":"","seq":2,"ageDays":50,"kind":"meta","tool":"","target":"","text":"<system-reminder>Do not mention this reminder.</system-reminder>"},{"session":"aa11bb22","source":"claude_code","project":"/tmp/demo/old","title":"","seq":0,"ageDays":783,"kind":"user_request","tool":"","target":"","text":"Investigate the flaky websocket reconnect loop."},{"session":"aa11bb22","source":"claude_code","project":"/tmp/demo/new","title":"","seq":0,"ageDays":1,"kind":"user_request","tool":"","target":"","text":"Investigate the flaky websocket reconnect loop."},{"session":"cc33dd44","source":"codex","project":"/tmp/demo/graphics","title":"","seq":0,"ageDays":49,"kind":"user_request","tool":"","target":"","text":"Implement quaternion slerp for the camera rig."},{"session":"cc33dd44","source":"codex","project":"/tmp/demo/graphics","title":"","seq":1,"ageDays":49,"kind":"thinking","tool":"","target":"","text":"Spherical interpolation over quaternions needs the shortest-arc sign fix."},{"session":"cc33dd44","source":"codex","project":"/tmp/demo/graphics","title":"","seq":2,"ageDays":49,"kind":"tool_input","tool":"exec","target":"cat rig/camera.py","text":"exec cat rig/camera.py"},{"session":"cc33dd44","source":"codex","project":"/tmp/demo/graphics","title":"","seq":3,"ageDays":49,"kind":"tool_output","tool":"exec","target":"","text":"def slerp(a, b, t):\n    return a"},{"session":"cc33dd44","source":"codex","project":"/tmp/demo/graphics","title":"","seq":4,"ageDays":49,"kind":"assistant_text","tool":"","target":"","text":"Added quaternion slerp with the sign correction."},{"session":"ee55ff66","source":"claude_prompts","project":"/tmp/demo/lost","title":"","seq":0,"ageDays":65,"kind":"user_request","tool":"","target":"","text":"deploy the pelican migration to staging"}],"kindPoints":{"user_request":5,"error":4,"assistant_text":3,"tool_input":2,"tool_output":1,"thinking":1,"meta":0},"termPoints":2,"phrasePoints":3,"phraseWindow":60,"bands":[[7,3],[30,2],[180,1]]}</script>
+<script>
+(function () {
+  "use strict";
+  var D = JSON.parse(document.getElementById("data").textContent);
+  var explain = false;
+
+  function tokenize(q) {
+    var out = [], i = 0;
+    while (i < q.length) {
+      var c = q.charAt(i);
+      if (c === '"') {
+        var j = q.indexOf('"', i + 1);
+        if (j === -1) { out.push(q.slice(i + 1).trim()); break; }
+        var span = q.slice(i + 1, j).trim();
+        if (span) out.push(span);
+        i = j + 1;
+      } else if (/\s/.test(c)) { i++; }
+      else {
+        var k = i;
+        while (k < q.length && !/\s/.test(q.charAt(k))) k++;
+        out.push(q.slice(i, k));
+        i = k;
+      }
+    }
+    return out.filter(function (t) { return t.length > 0; });
+  }
+
+  function positions(hay, term) {
+    var out = [], start = 0, k;
+    while ((k = hay.indexOf(term, start)) !== -1) { out.push(k); start = k + 1; }
+    return out;
+  }
+
+  function inWindow(found, terms) {
+    var rarest = terms[0];
+    terms.forEach(function (t) {
+      if (found[t].length < found[rarest].length) rarest = t;
+    });
+    for (var a = 0; a < found[rarest].length; a++) {
+      var lo = found[rarest][a], hi = lo + rarest.length, ok = true;
+      for (var b = 0; b < terms.length; b++) {
+        var t = terms[b];
+        if (t === rarest) continue;
+        var best = null;
+        for (var c = 0; c < found[t].length; c++) {
+          var p = found[t][c];
+          var lo2 = Math.min(lo, p), hi2 = Math.max(hi, p + t.length);
+          if (hi2 - lo2 <= D.phraseWindow) { best = [lo2, hi2]; break; }
+        }
+        if (!best) { ok = false; break; }
+        lo = best[0]; hi = best[1];
+      }
+      if (ok) return true;
+    }
+    return false;
+  }
+
+  function parts(row, terms) {
+    var hay = (row.text + "\n" + row.target).toLowerCase();
+    var found = {}, n = 0;
+    terms.forEach(function (t) {
+      var p = positions(hay, t.toLowerCase());
+      if (p.length) { found[t] = p; n++; }
+    });
+    var phrase = 0;
+    if (terms.length && n === terms.length && inWindow(found, terms)) {
+      phrase = D.phrasePoints;
+    }
+    var recency = 0;
+    if (row.ageDays !== null) {
+      var days = Math.max(0, row.ageDays);
+      for (var i = 0; i < D.bands.length; i++) {
+        if (days <= D.bands[i][0]) { recency = D.bands[i][1]; break; }
+      }
+    }
+    return {
+      kind: D.kindPoints[row.kind] || 0,
+      terms: D.termPoints * n,
+      phrase: phrase,
+      recency: recency,
+      matched: n
+    };
+  }
+
+  function esc(s) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  function highlight(text, terms) {
+    var html = esc(text);
+    terms.forEach(function (t) {
+      if (!t) return;
+      var re = new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+      html = html.replace(re, function (m) { return "<mark>" + m + "</mark>"; });
+    });
+    return html;
+  }
+
+  function snip(text, terms) {
+    var flat = text.replace(/\s+/g, " ").trim();
+    if (flat.length <= 260) return flat;
+    var low = flat.toLowerCase(), at = -1;
+    for (var i = 0; i < terms.length && at === -1; i++) {
+      at = low.indexOf(terms[i].toLowerCase());
+    }
+    if (at === -1) return flat.slice(0, 260) + "\u2026";
+    var s = Math.max(0, at - 60);
+    return (s > 0 ? "\u2026" : "") + flat.slice(s, s + 260)
+      + (s + 260 < flat.length ? "\u2026" : "");
+  }
+
+  function when(age) {
+    if (age === null) return "undated";
+    if (age <= 0) return "today";
+    if (age === 1) return "yesterday";
+    if (age < 60) return age + " days ago";
+    if (age < 730) return Math.round(age / 30) + " months ago";
+    return (age / 365).toFixed(1) + " years ago";
+  }
+
+  function search(q, kindFilter) {
+    var terms = tokenize(q);
+    var scored = [];
+    D.corpus.forEach(function (row) {
+      if (row.kind === "meta" && kindFilter !== "meta") return;
+      if (kindFilter && row.kind !== kindFilter) return;
+      var p = parts(row, terms);
+      if (terms.length && p.matched < terms.length) return;
+      scored.push({ score: p.kind + p.terms + p.phrase + p.recency, parts: p, row: row });
+    });
+    scored.sort(function (a, b) {
+      if (b.score !== a.score) return b.score - a.score;
+      if (a.row.ageDays !== b.row.ageDays) return a.row.ageDays - b.row.ageDays;
+      if (a.row.session !== b.row.session) return a.row.session < b.row.session ? -1 : 1;
+      return a.row.seq - b.row.seq;
+    });
+    return { terms: terms, hits: scored.slice(0, 8), total: scored.length };
+  }
+
+  function render() {
+    var q = document.getElementById("query").value;
+    var kindFilter = document.getElementById("kind").value;
+    var r = search(q, kindFilter);
+    var box = document.getElementById("results");
+    box.innerHTML = "";
+    if (!r.hits.length) {
+      var none = document.createElement("p");
+      none.className = "note";
+      none.id = "nohits";
+      none.textContent = "No turn in the fixture archive matches every term. "
+        + "That is the answer, not a failure: the control fixture exists so that "
+        + "\u201cfinds nothing when there is nothing\u201d is testable.";
+      box.appendChild(none);
+      return r;
+    }
+    r.hits.forEach(function (h) {
+      var el = document.createElement("div");
+      el.className = "hit";
+      var p = h.parts;
+      el.innerHTML =
+        '<div class="meta"><span class="score">' + h.score + '</span>'
+        + '<span>' + esc(h.row.kind) + (h.row.tool ? "/" + esc(h.row.tool) : "") + '</span>'
+        + '<span>' + when(h.row.ageDays) + '</span>'
+        + '<span>session ' + esc(h.row.session) + '</span>'
+        + '<span>' + esc(h.row.project || "") + '</span></div>'
+        + (explain
+          ? '<div class="why">kind ' + p.kind + ' + terms ' + p.terms + ' + phrase '
+            + p.phrase + ' + recency ' + p.recency + ' = ' + h.score + '</div>'
+          : '')
+        + '<div class="body">' + highlight(snip(h.row.text, r.terms), r.terms) + '</div>';
+      box.appendChild(el);
+    });
+    return r;
+  }
+
+  var kinds = [];
+  D.corpus.forEach(function (row) {
+    if (kinds.indexOf(row.kind) === -1) kinds.push(row.kind);
+  });
+  kinds.sort();
+  var sel = document.getElementById("kind");
+  kinds.forEach(function (k) {
+    var o = document.createElement("option");
+    o.value = k; o.textContent = k;
+    sel.appendChild(o);
+  });
+
+  document.getElementById("query").addEventListener("input", render);
+  sel.addEventListener("change", render);
+  document.getElementById("explain").addEventListener("click", function () {
+    explain = !explain;
+    this.textContent = explain ? "hide scores" : "explain";
+    render();
+  });
+  document.getElementById("theme").addEventListener("click", function () {
+    var root = document.documentElement;
+    var now = root.getAttribute("data-theme");
+    var dark = now ? now === "dark"
+      : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    root.setAttribute("data-theme", dark ? "light" : "dark");
+  });
+
+  var first = render();
+
+  // Something only a running script could have produced, so the browser check can tell
+  // "the script ran" apart from "the file exists".
+  var probe = search("crlf importer", "");
+  var top = probe.hits[0];
+  var empty = search("quaternion pelican", "");
+  document.getElementById("selftest").textContent =
+    "SELFTEST:OK corpus=" + D.corpus.length
+    + " hits=" + first.total
+    + " top=" + (top ? top.row.session + ":" + top.row.kind + ":" + top.score : "none")
+    + " absent=" + empty.total;
+})();
+</script>
+</body>
+</html>

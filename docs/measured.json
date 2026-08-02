@@ -1,0 +1,35 @@
+{
+  "build_seconds": 3.7,
+  "by_kind": {
+    "assistant_text": 9429,
+    "error": 790,
+    "meta": 5701,
+    "thinking": 3433,
+    "tool_input": 15049,
+    "tool_output": 14026,
+    "user_request": 3453
+  },
+  "by_source": {
+    "claude_code": 679,
+    "claude_prompts": 152,
+    "codex": 43
+  },
+  "index_bytes": 136663040,
+  "measured_on": "2026-08-01",
+  "projects": 46,
+  "query_ms_max": 7.6,
+  "query_ms_median": 1.3,
+  "raw_bytes": 567858059,
+  "sessions": 874,
+  "sources": [
+    "claude_code",
+    "codex",
+    "claude_prompts"
+  ],
+  "span": [
+    "2026-01-27",
+    "2026-08-01"
+  ],
+  "transcript_files": 770,
+  "turns": 51881
+}
