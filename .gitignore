@@ -1,0 +1,17 @@
+# The index holds raw, unredacted transcript text. It lives outside the repo by default
+# (see sessionsearch/indexer.py); these rules are the second line of defence in case
+# somebody points --index at the working tree.
+*.db
+*.db-wal
+*.db-shm
+index/
+.cache/
+
+# Nothing derived from the real archive belongs here.
+measured/
+*.transcript.json
+
+__pycache__/
+*.pyc
+.venv/
+node_modules/
