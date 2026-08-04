@@ -14,7 +14,7 @@ something like this", which is a ranking problem.
 ```
 $ python3 -m sessionsearch.cli search "crlf fixture" --explain --limit 1
 
-[ 15] 2026-08-01 10:41  you asked  ~/Projects/thousand/projects/bus-factor
+[ 15] 2026-08-01 10:41  you asked  <repo>/bus-factor
       session 15f05fff  claude_code  today  seq 3825
       why: kind 5 + terms 4 + phrase 3 + recency 3 = 15
     - [meta] Conversation compacted
@@ -159,7 +159,7 @@ Filters, on both `search` and `sessions`:
 
 ```
 --kind user_request|error|assistant_text|tool_input|tool_output|thinking|meta
---tool Bash --tool Edit          --project thousand
+--tool Bash --tool Edit          --project my-project
 --source claude_code|codex|claude_prompts
 --since 7d|2026-06-01            --until 30d
 --session 15f05fff               --sidechain only|never|both

@@ -112,7 +112,10 @@ class TestFalsePositives(unittest.TestCase):
                 self.assertEqual(redact.redact(text), text)
 
     def test_a_deep_path_is_not_mistaken_for_base64(self):
-        p = "Projects/thousand/projects/sessionsearch2/indexer"
+        # A deep path with the same shape as the original, which named a private
+        # repository. The LENGTH and segment count are what the test is about, so a
+        # shorter replacement would quietly weaken it.
+        p = "Projects/catalog/projects/sessionsearch2/indexer"
         self.assertEqual(redact.redact(p), p)
         # Control: base64 of the same length IS masked, so the discrimination is real
         # rather than the rule being switched off.
